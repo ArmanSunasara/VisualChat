@@ -1,12 +1,46 @@
 /* Center the empty-state invitation with its composer. */
-section:has(.conversation:empty){position:relative;justify-content:center;padding-bottom:12vh}
-section:has(.conversation:empty) .workspace-header{position:absolute;top:28px;right:46px;left:46px}
-section:has(.conversation:empty) .conversation{display:grid;flex:none;place-items:center;overflow:visible;padding:0 0 32px}
-.conversation:empty::before{content:"What’s on your mind today?";color:#f4f8f2;font-size:clamp(30px,3.2vw,46px);font-weight:600;letter-spacing:-.055em;line-height:1.1;text-align:center}
-section:has(.conversation:empty) form{width:100%}
+section:has(.conversation:empty) {
+  position: relative;
+  justify-content: center;
+  padding-bottom: 12vh;
+}
+section:has(.conversation:empty) .workspace-header {
+  position: absolute;
+  top: 28px;
+  right: 46px;
+  left: 46px;
+}
+section:has(.conversation:empty) .conversation {
+  display: grid;
+  flex: none;
+  place-items: center;
+  overflow: visible;
+  padding: 0 0 32px;
+}
+.conversation:empty::before {
+  content: "What’s on your mind today?";
+  color: #f4f8f2;
+  font-size: clamp(30px, 3.2vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 1.1;
+  text-align: center;
+}
+section:has(.conversation:empty) form {
+  width: 100%;
+}
 
-@media(max-width:650px){
-  section:has(.conversation:empty){justify-content:center;padding-bottom:8vh}
-  section:has(.conversation:empty) .workspace-header{top:18px;right:14px;left:14px}
-  .conversation:empty::before{font-size:31px}
+@media (max-width: 650px) {
+  section:has(.conversation:empty) {
+    justify-content: center;
+    padding-bottom: 8vh;
+  }
+  section:has(.conversation:empty) .workspace-header {
+    top: 18px;
+    right: 14px;
+    left: 14px;
+  }
+  .conversation:empty::before {
+    font-size: 31px;
+  }
 }
