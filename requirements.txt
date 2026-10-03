@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+langgraph
+langchain-groq
+langsmith
+python-dotenv
+psycopg[binary]
+pgvector
+pypdf
+python-docx
+python-pptx
+python-multipart
+sentence-transformers
+httpx
+beautifulsoup4
