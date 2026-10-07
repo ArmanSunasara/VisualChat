@@ -66,7 +66,7 @@ export function NodeDetailsPanel({
 
       <div className="details-content">
         {/* User Message Section */}
-        <section className="details-message-block user-block">
+        <div className="details-message-block user-block">
           <div className="message-block-header">
             <div className="message-sender-info">
               <i className="avatar user-avatar">A</i>
@@ -107,7 +107,7 @@ export function NodeDetailsPanel({
           <div className="user-message-body">
             <p className="user-copy-full">{turn.userMessage.content}</p>
           </div>
-        </section>
+        </div>
 
         <div className="details-connector">
           <span className="connector-line" />
@@ -116,7 +116,7 @@ export function NodeDetailsPanel({
         </div>
 
         {/* AI Assistant Response Section */}
-        <section className="details-message-block assistant-block">
+        <div className="details-message-block assistant-block">
           <div className="message-block-header">
             <div className="message-sender-info">
               <i className="avatar assistant-avatar">✦</i>
@@ -158,7 +158,7 @@ export function NodeDetailsPanel({
               </p>
             )}
           </div>
-        </section>
+        </div>
       </div>
 
       <div className="details-footer">

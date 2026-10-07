@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -10,22 +10,33 @@ import {
   useEdgesState,
   ReactFlowProvider,
   useReactFlow,
+  Node,
+  Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Message, ConversationTurn } from "../../types";
+import { Message, ConversationTurn, BranchConversation, BranchMap } from "../../types";
 import { ConversationTurnNode } from "./ConversationTurnNode";
+import { BranchConversationNode } from "./BranchConversationNode";
 import { NodeDetailsPanel } from "./NodeDetailsPanel";
-import { TurnNodeType, TurnEdgeType } from "./types";
+import { BranchCreationDialog } from "./BranchCreationDialog";
+import { TurnNodeType, BranchNodeType, TurnEdgeType } from "./types";
 import "./graph.css";
 
 const nodeTypes = {
   turnNode: ConversationTurnNode,
+  branchNode: BranchConversationNode,
 };
 
-const NODE_WIDTH = 320;
+// Layout constants
+const NODE_WIDTH = 310;
+const BRANCH_NODE_WIDTH = 250;
 const NODE_GAP_X = 130;
-const BASE_Y = 160;
+const BRANCH_GAP_X = 90;
+const BASE_Y = 200;
 const START_X = 60;
+const BRANCH_GAP_Y = 100; // vertical gap between main row and branch
+const BRANCH_ROW_H = 180; // height of a branch node
+const BRANCH_SIDE_GAP = 40; // horizontal between sibling branches
 
 export function convertMessagesToTurns(
   messages: Message[],
@@ -101,78 +112,223 @@ export function convertMessagesToTurns(
 }
 
 interface ConversationGraphProps {
+  conversationId?: string;
+  conversationTitle?: string;
   messages: Message[];
   modelName: string;
   busy?: boolean;
   onSwitchToChat?: () => void;
+  onOpenBranchChat?: (branch: BranchConversation) => void;
+}
+
+interface BranchDialogState {
+  turnIndex: number;  // 0-based turn index in a conversation
+  parentConversationId: string;
 }
 
 function InnerGraph({
+  conversationId,
+  conversationTitle,
   messages,
   modelName,
   busy = false,
   onSwitchToChat,
+  onOpenBranchChat,
 }: ConversationGraphProps) {
   const [selectedTurnId, setSelectedTurnId] = useState<string | null>(null);
+  const [branchMap, setBranchMap] = useState<BranchMap>({});
+  const [branchDialog, setBranchDialog] = useState<BranchDialogState | null>(null);
+  const [creatingBranch, setCreatingBranch] = useState(false);
   const { fitView } = useReactFlow();
+  const prevConvIdRef = useRef<string | undefined>(undefined);
+
+  // Fetch branches when conversation changes
+  useEffect(() => {
+    if (!conversationId) {
+      setBranchMap({});
+      return;
+    }
+    if (prevConvIdRef.current !== conversationId) {
+      prevConvIdRef.current = conversationId;
+      setBranchMap({});
+    }
+    fetchBranches(conversationId);
+  }, [conversationId, messages.length]); // refetch when new turns are added too
+
+  async function fetchBranches(convId: string) {
+    try {
+      const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+      const resp = await fetch(`${apiBaseUrl}/api/conversations/${convId}/branches`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const map: BranchMap = {};
+      for (const b of data.branches as BranchConversation[]) {
+        const idx = b.parent_turn_index;
+        if (!map[idx]) map[idx] = [];
+        map[idx].push(b);
+      }
+      setBranchMap(map);
+    } catch {
+      // silently ignore – branch UI is optional
+    }
+  }
+
+  async function handleCreateBranch(contextMode: "inherit" | "independent") {
+    if (!branchDialog || !conversationId) return;
+    setCreatingBranch(true);
+    try {
+      const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+      const resp = await fetch(
+        `${apiBaseUrl}/api/conversations/${branchDialog.parentConversationId}/branches`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            parent_conversation_id: branchDialog.parentConversationId,
+            parent_turn_index: branchDialog.turnIndex,
+            context_mode: contextMode,
+          }),
+        }
+      );
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.detail || "Failed to create branch");
+      }
+      const branch: BranchConversation = await resp.json();
+      branch.messages = [];
+      branch.has_children = false;
+      setBranchMap((prev) => {
+        const idx = branch.parent_turn_index;
+        return { ...prev, [idx]: [...(prev[idx] || []), branch] };
+      });
+      setBranchDialog(null);
+      // Auto-open the new branch for chatting
+      onOpenBranchChat?.(branch);
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setCreatingBranch(false);
+    }
+  }
 
   const turns = useMemo(
     () => convertMessagesToTurns(messages, busy),
     [messages, busy],
   );
 
-  const initialNodesAndEdges = useMemo(() => {
-    const nodes: TurnNodeType[] = turns.map((turn, index) => ({
-      id: turn.id,
-      type: "turnNode",
-      position: {
-        x: START_X + index * (NODE_WIDTH + NODE_GAP_X),
-        y: BASE_Y,
-      },
-      data: {
-        turn,
-        modelName,
-        isSelected: selectedTurnId === turn.id,
-      },
-    }));
-
+  // Build nodes + edges including branch nodes
+  const { nodes: computedNodes, edges: computedEdges } = useMemo(() => {
+    const nodes: (TurnNodeType | BranchNodeType)[] = [];
     const edges: TurnEdgeType[] = [];
-    for (let i = 0; i < turns.length - 1; i++) {
-      const sourceId = turns[i].id;
-      const targetId = turns[i + 1].id;
-      edges.push({
-        id: `edge-${sourceId}-${targetId}`,
-        source: sourceId,
-        target: targetId,
-        type: "smoothstep",
-        animated: turns[i + 1].isGenerating,
-        style: {
-          stroke: "#486854",
-          strokeWidth: 2.5,
+
+    // Main-row turn nodes
+    turns.forEach((turn, index) => {
+      const x = START_X + index * (NODE_WIDTH + NODE_GAP_X);
+      const branches = branchMap[turn.turnNumber - 1] || [];
+
+      nodes.push({
+        id: turn.id,
+        type: "turnNode",
+        position: { x, y: BASE_Y },
+        data: {
+          turn,
+          modelName,
+          isSelected: selectedTurnId === turn.id,
+          branches,
+          onCreateBranch: conversationId
+            ? (turnIdx: number) => {
+                setBranchDialog({ turnIndex: turnIdx, parentConversationId: conversationId });
+              }
+            : undefined,
+          onOpenBranch: onOpenBranchChat,
         },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: "#b9f16e",
-          width: 18,
-          height: 18,
-        },
-      });
-    }
+      } as TurnNodeType);
+
+      // Edges between main turns
+      if (index > 0) {
+        const prevTurn = turns[index - 1];
+        edges.push({
+          id: `edge-main-${prevTurn.id}-${turn.id}`,
+          source: prevTurn.id,
+          target: turn.id,
+          type: "smoothstep",
+          animated: turn.isGenerating,
+          style: { stroke: "#486854", strokeWidth: 2.5 },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: "#b9f16e",
+            width: 18,
+            height: 18,
+          },
+        });
+      }
+
+      // Branch nodes hanging below each turn
+      if (branches.length > 0) {
+        const mainNodeCenterX = x + NODE_WIDTH / 2;
+        const totalBranchWidth =
+          branches.length * BRANCH_NODE_WIDTH +
+          (branches.length - 1) * BRANCH_SIDE_GAP;
+        const branchStartX = mainNodeCenterX - totalBranchWidth / 2;
+        const branchY = BASE_Y + 220 + BRANCH_GAP_Y; // below main row
+
+        branches.forEach((branch, bIdx) => {
+          const bx = branchStartX + bIdx * (BRANCH_NODE_WIDTH + BRANCH_SIDE_GAP);
+          const branchNodeId = `branch-${branch.id}`;
+
+          nodes.push({
+            id: branchNodeId,
+            type: "branchNode",
+            position: { x: bx, y: branchY },
+            data: {
+              branch,
+              turnIndex: turn.turnNumber - 1,
+              branchIndex: bIdx,
+              totalSiblings: branches.length,
+              modelName,
+              isSelected: false,
+              onOpenBranch: onOpenBranchChat,
+              onCreateBranch: (_branchId: string, _turnIdx: number) => {
+                // Sub-branching: parent is the branch conversation itself
+                setBranchDialog({ turnIndex: _turnIdx, parentConversationId: _branchId });
+              },
+            },
+          } as BranchNodeType);
+
+          // Edge from main turn bottom to branch node top
+          edges.push({
+            id: `edge-branch-${turn.id}-${branchNodeId}`,
+            source: turn.id,
+            sourceHandle: "branch-out",
+            target: branchNodeId,
+            targetHandle: "top",
+            type: "smoothstep",
+            style: {
+              stroke: "#3a5c44",
+              strokeWidth: 2,
+              strokeDasharray: "6,4",
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: "#8be04e",
+              width: 14,
+              height: 14,
+            },
+          });
+        });
+      }
+    });
 
     return { nodes, edges };
-  }, [turns, modelName, selectedTurnId]);
+  }, [turns, branchMap, modelName, selectedTurnId, conversationId, onOpenBranchChat]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(
-    initialNodesAndEdges.nodes,
-  );
-  const [edges, setEdges, onEdgesChange] = useEdgesState(
-    initialNodesAndEdges.edges,
-  );
+  const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
 
   useEffect(() => {
-    setNodes(initialNodesAndEdges.nodes);
-    setEdges(initialNodesAndEdges.edges);
-  }, [initialNodesAndEdges, setNodes, setEdges]);
+    setNodes(computedNodes);
+    setEdges(computedEdges);
+  }, [computedNodes, computedEdges, setNodes, setEdges]);
 
   useEffect(() => {
     if (turns.length > 0) {
@@ -188,19 +344,21 @@ function InnerGraph({
     [turns, selectedTurnId],
   );
 
-  const onNodeClick = useCallback((_: React.MouseEvent, node: TurnNodeType) => {
-    setSelectedTurnId(node.id);
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    if (node.type === "turnNode") {
+      setSelectedTurnId(node.id);
+    }
   }, []);
 
   const handleSelectTurnByNumber = useCallback(
     (turnNumber: number) => {
       const target = turns.find((t) => t.turnNumber === turnNumber);
-      if (target) {
-        setSelectedTurnId(target.id);
-      }
+      if (target) setSelectedTurnId(target.id);
     },
     [turns],
   );
+
+  const totalBranches = Object.values(branchMap).reduce((s, arr) => s + arr.length, 0);
 
   return (
     <div className="conversation-graph-container">
@@ -210,6 +368,11 @@ function InnerGraph({
           <span className="graph-count-pill">
             {turns.length} {turns.length === 1 ? "turn" : "turns"}
           </span>
+          {totalBranches > 0 && (
+            <span className="graph-branch-pill">
+              ⎇ {totalBranches} {totalBranches === 1 ? "branch" : "branches"}
+            </span>
+          )}
           {busy && <span className="graph-live-indicator">● Streaming turn</span>}
         </div>
         <div className="graph-actions">
@@ -221,7 +384,7 @@ function InnerGraph({
             ⛶ Fit View
           </button>
           <span className="graph-hint">
-            Scroll to zoom • Drag canvas • Click node for details
+            Scroll to zoom • Drag canvas • Click node for details • ⎇ Branch to diverge
           </span>
         </div>
       </div>
@@ -232,7 +395,7 @@ function InnerGraph({
           <h3>No Conversation Nodes Yet</h3>
           <p>
             This chat does not contain any messages yet. Start chatting in the
-            Chat view or send a prompt below to generate graph turns.
+            Chat view to generate graph turns.
           </p>
           {onSwitchToChat && (
             <button className="empty-switch-btn" onClick={onSwitchToChat}>
@@ -250,11 +413,9 @@ function InnerGraph({
             onNodeClick={onNodeClick}
             nodeTypes={nodeTypes}
             fitView
-            minZoom={0.2}
+            minZoom={0.15}
             maxZoom={2}
-            defaultEdgeOptions={{
-              type: "smoothstep",
-            }}
+            defaultEdgeOptions={{ type: "smoothstep" }}
             proOptions={{ hideAttribution: true }}
           >
             <Background
@@ -266,7 +427,7 @@ function InnerGraph({
             <Controls className="graph-controls-custom" showInteractive={false} />
             <MiniMap
               className="graph-minimap-custom"
-              nodeColor="#293c31"
+              nodeColor={(n) => (n.type === "branchNode" ? "#1e3427" : "#293c31")}
               maskColor="rgba(10, 15, 13, 0.85)"
               zoomable
               pannable
@@ -282,6 +443,16 @@ function InnerGraph({
             />
           )}
         </div>
+      )}
+
+      {branchDialog && (
+        <BranchCreationDialog
+          parentTitle={conversationTitle || ""}
+          turnNumber={branchDialog.turnIndex + 1}
+          onConfirm={handleCreateBranch}
+          onCancel={() => setBranchDialog(null)}
+          creating={creatingBranch}
+        />
       )}
     </div>
   );

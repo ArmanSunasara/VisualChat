@@ -30,6 +30,9 @@ export type Conversation = {
   title: string;
   pinned: boolean;
   updated_at?: string;
+  parent_conversation_id?: string | null;
+  parent_turn_index?: number | null;
+  context_mode?: "inherit" | "independent";
 };
 
 export type ConversationTurn = {
@@ -40,3 +43,19 @@ export type ConversationTurn = {
   assistantMessage?: Message;
   isGenerating?: boolean;
 };
+
+/** A branch conversation attached to a specific turn of a parent. */
+export type BranchConversation = {
+  id: string;
+  title: string;
+  model: string | null;
+  pinned: boolean;
+  parent_conversation_id: string;
+  parent_turn_index: number;
+  context_mode: "inherit" | "independent";
+  messages: Message[];
+  has_children: boolean;
+};
+
+/** Maps parentTurnIndex → list of branches */
+export type BranchMap = Record<number, BranchConversation[]>;

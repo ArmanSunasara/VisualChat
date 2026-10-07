@@ -11,9 +11,11 @@ import {
   Message,
   Model,
   Conversation,
+  BranchConversation,
 } from "./types";
 import { Reply } from "./components/Reply";
 import { ConversationGraph } from "./components/graph/ConversationGraph";
+import { BranchChatPanel } from "./components/graph/BranchChatPanel";
 // @ts-expect-error CSS is bundled by the frontend build tool.
 import "./style.css";
 // @ts-expect-error CSS is bundled by the frontend build tool.
@@ -48,8 +50,10 @@ const apiUrl = (path: string) => `${apiBaseUrl}${path}`;
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string>();
+  const [conversationTitle, setConversationTitle] = useState<string>();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [viewMode, setViewMode] = useState<"chat" | "graph">("chat");
+  const [activeBranch, setActiveBranch] = useState<BranchConversation | null>(null);
   const historyRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -211,6 +215,8 @@ function App() {
     if (!conversationResponse.ok) return;
     const data = await conversationResponse.json();
     setConversationId(data.id);
+    setConversationTitle(data.title);
+    setActiveBranch(null); // reset branch when opening new conversation
     if (data.model && models.some((item) => item.id === data.model))
       setModel(data.model);
     setMessages(
@@ -443,12 +449,32 @@ function App() {
         </header>
 
         {viewMode === "graph" ? (
-          <ConversationGraph
-            messages={messages}
-            modelName={selected.name}
-            busy={busy}
-            onSwitchToChat={() => setViewMode("chat")}
-          />
+          <div className="graph-split-wrapper">
+            <ConversationGraph
+              conversationId={conversationId}
+              conversationTitle={conversationTitle}
+              messages={messages}
+              modelName={selected.name}
+              busy={busy}
+              onSwitchToChat={() => setViewMode("chat")}
+              onOpenBranchChat={(branch) => setActiveBranch(branch)}
+            />
+            {activeBranch && (
+              <BranchChatPanel
+                key={activeBranch.id}
+                branch={activeBranch}
+                modelName={selected.name}
+                onClose={() => setActiveBranch(null)}
+                onBranchUpdated={(branch, newMessages) => {
+                  setActiveBranch((prev) =>
+                    prev?.id === branch.id
+                      ? { ...prev, messages: newMessages }
+                      : prev
+                  );
+                }}
+              />
+            )}
+          </div>
         ) : (
           <div className="conversation">
             {messages.map((message, index) => (
@@ -509,6 +535,7 @@ function App() {
           </div>
         )}
 
+        {viewMode === "chat" && (
         <form
           onSubmit={send}
           onKeyDownCapture={(event) => {
@@ -640,6 +667,7 @@ function App() {
             </button>
           </div>
         </form>
+        )}
       </section>
       {deleteChat && (
         <div

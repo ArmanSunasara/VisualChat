@@ -1,6 +1,7 @@
 """Request and model definitions for chat endpoints."""
 
 from uuid import UUID
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,14 @@ class ChatRequest(BaseModel):
 
 
 class NewConversationRequest(BaseModel):
+    model: str | None = None
+
+
+class CreateBranchRequest(BaseModel):
+    """Create a branch conversation from a parent conversation at a specific turn."""
+    parent_conversation_id: UUID
+    parent_turn_index: int = Field(ge=0)
+    context_mode: Literal["inherit", "independent"] = "inherit"
     model: str | None = None
 
 
