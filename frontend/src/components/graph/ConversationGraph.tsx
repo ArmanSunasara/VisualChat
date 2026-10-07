@@ -18,6 +18,7 @@ import { Message, ConversationTurn, BranchConversation, BranchMap } from "../../
 import { ConversationTurnNode } from "./ConversationTurnNode";
 import { BranchConversationNode } from "./BranchConversationNode";
 import { NodeDetailsPanel } from "./NodeDetailsPanel";
+import { BranchDetailsPanel } from "./BranchDetailsPanel";
 import { BranchCreationDialog } from "./BranchCreationDialog";
 import { TurnNodeType, BranchNodeType, TurnEdgeType } from "./types";
 import "./graph.css";
@@ -136,6 +137,7 @@ function InnerGraph({
   onOpenBranchChat,
 }: ConversationGraphProps) {
   const [selectedTurnId, setSelectedTurnId] = useState<string | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [branchMap, setBranchMap] = useState<BranchMap>({});
   const [branchDialog, setBranchDialog] = useState<BranchDialogState | null>(null);
   const [creatingBranch, setCreatingBranch] = useState(false);
@@ -286,7 +288,7 @@ function InnerGraph({
               branchIndex: bIdx,
               totalSiblings: branches.length,
               modelName,
-              isSelected: false,
+              isSelected: selectedBranchId === branch.id,
               onOpenBranch: onOpenBranchChat,
               onCreateBranch: (_branchId: string, _turnIdx: number) => {
                 // Sub-branching: parent is the branch conversation itself
@@ -320,7 +322,7 @@ function InnerGraph({
     });
 
     return { nodes, edges };
-  }, [turns, branchMap, modelName, selectedTurnId, conversationId, onOpenBranchChat]);
+  }, [turns, branchMap, modelName, selectedTurnId, selectedBranchId, conversationId, onOpenBranchChat]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(computedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(computedEdges);
@@ -344,9 +346,25 @@ function InnerGraph({
     [turns, selectedTurnId],
   );
 
+  const selectedBranch = useMemo(() => {
+    if (!selectedBranchId) return null;
+    for (const branches of Object.values(branchMap)) {
+      const found = branches.find((b) => b.id === selectedBranchId);
+      if (found) return found;
+    }
+    return null;
+  }, [branchMap, selectedBranchId]);
+
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (node.type === "turnNode") {
       setSelectedTurnId(node.id);
+      setSelectedBranchId(null);
+    } else if (node.type === "branchNode") {
+      const branchData = (node.data as any)?.branch as BranchConversation;
+      if (branchData) {
+        setSelectedBranchId(branchData.id);
+        setSelectedTurnId(null);
+      }
     }
   }, []);
 
@@ -440,6 +458,18 @@ function InnerGraph({
               modelName={modelName}
               onClose={() => setSelectedTurnId(null)}
               onSelectTurn={handleSelectTurnByNumber}
+            />
+          )}
+
+          {selectedBranch && (
+            <BranchDetailsPanel
+              branch={selectedBranch}
+              modelName={modelName}
+              onClose={() => setSelectedBranchId(null)}
+              onOpenBranchChat={(branch) => {
+                setSelectedBranchId(null);
+                onOpenBranchChat?.(branch);
+              }}
             />
           )}
         </div>

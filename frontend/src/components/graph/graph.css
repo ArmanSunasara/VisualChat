@@ -1518,3 +1518,214 @@ section.graph-mode {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Branch Details Panel (Subgraph side drawer) */
+.branch-details-panel {
+  border-left: 1px solid #324a3a;
+}
+
+.branch-icon-pill {
+  font-family: "DM Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #8be04e;
+  background: #172b1d;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #2f5037;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.branch-header-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.branch-header-title-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #eaf3eb;
+  margin: 0;
+}
+
+.branch-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.details-context-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.details-context-banner.inherit {
+  background: #15271a;
+  border: 1px solid #2d4c35;
+  color: #c9e4ce;
+}
+
+.details-context-banner.independent {
+  background: #252014;
+  border: 1px solid #4a3e20;
+  color: #e2d3b2;
+}
+
+.context-banner-icon {
+  font-size: 16px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.context-banner-text strong {
+  display: block;
+  font-size: 12.5px;
+  margin-bottom: 2px;
+}
+
+.details-context-banner.inherit .context-banner-text strong {
+  color: #8be04e;
+}
+
+.details-context-banner.independent .context-banner-text strong {
+  color: #e8c872;
+}
+
+.context-banner-text p {
+  margin: 0;
+  font-size: 11.5px;
+  opacity: 0.88;
+}
+
+.branch-details-turn-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed #24352b;
+}
+
+.branch-details-turn-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.branch-turn-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.branch-turn-number {
+  font-family: "DM Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #8be04e;
+  background: #18281d;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid #2b4633;
+}
+
+.branch-turn-total {
+  font-size: 10.5px;
+  color: #708677;
+}
+
+.branch-details-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  gap: 12px;
+  background: #141f17;
+  border: 1px dashed #283d2f;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.empty-subgraph-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #1a2c1f;
+  border: 1px solid #304e37;
+  color: #8be04e;
+  font-size: 24px;
+}
+
+.branch-details-empty h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #e2ede3;
+}
+
+.branch-details-empty p {
+  margin: 0;
+  font-size: 12.5px;
+  color: #7f9586;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.branch-details-open-chat-btn {
+  margin-top: 8px;
+  padding: 8px 16px;
+  border: 1px solid #3e6047;
+  border-radius: 8px;
+  background: #1a3021;
+  color: #b9f16e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.branch-details-open-chat-btn:hover {
+  background: #25462f;
+  border-color: #558762;
+  box-shadow: 0 4px 14px rgba(185, 241, 110, 0.2);
+  transform: translateY(-1px);
+}
+
+.branch-details-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.open-branch-chat-btn {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #b9f16e;
+  color: #0d1a10;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.open-branch-chat-btn:hover {
+  background: #ccf78c;
+  box-shadow: 0 4px 14px rgba(185, 241, 110, 0.35);
+  transform: translateY(-1px);
+}
