@@ -4,42 +4,21 @@ import {
   useRef,
   FormEvent,
   ChangeEvent,
-  ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  Attachment,
+  Message,
+  Model,
+  Conversation,
+} from "./types";
+import { Reply } from "./components/Reply";
+import { ConversationGraph } from "./components/graph/ConversationGraph";
 // @ts-expect-error CSS is bundled by the frontend build tool.
 import "./style.css";
 // @ts-expect-error CSS is bundled by the frontend build tool.
 import "./empty-chat.css";
-type Attachment = {
-  id?: string;
-  filename: string;
-  content_type?: string;
-  status: "uploading" | "ready" | "error";
-  error?: string;
-};
-type MessageAttachment = {
-  id: string;
-  filename: string;
-  content_type?: string;
-};
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-  attachments?: MessageAttachment[];
-};
-type Model = {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-};
-type Conversation = {
-  id: string;
-  title: string;
-  pinned: boolean;
-  updated_at?: string;
-};
+
 const models: Model[] = [
   {
     id: "openai/gpt-oss-20b",
@@ -61,93 +40,28 @@ const models: Model[] = [
   },
 ];
 
-function inline(text: string): ReactNode[] {
-  return text
-    .split(/(`[^`]+`)/g)
-    .map((part, index) =>
-      part.startsWith("`") && part.endsWith("`") ? (
-        <code key={index}>{part.slice(1, -1)}</code>
-      ) : (
-        part
-      ),
-    );
-}
+// Leave this empty for Vite's local /api proxy. Set VITE_API_BASE_URL when the
+// frontend and API are deployed on different domains.
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+const apiUrl = (path: string) => `${apiBaseUrl}${path}`;
 
-function Reply({ content }: { content: string }) {
-  const blocks: ReactNode[] = [];
-  const lines = content.split("\n");
-  for (let index = 0; index < lines.length; ) {
-    const line = lines[index];
-    if (line.startsWith("```")) {
-      const code: string[] = [];
-      index++;
-      while (index < lines.length && !lines[index].startsWith("```"))
-        code.push(lines[index++]);
-      if (index < lines.length) index++;
-      blocks.push(
-        <pre key={index}>
-          <code>{code.join("\n")}</code>
-        </pre>,
-      );
-      continue;
-    }
-    if (/^###\s+/.test(line)) {
-      blocks.push(<h3 key={index}>{inline(line.replace(/^###\s+/, ""))}</h3>);
-      index++;
-      continue;
-    }
-    if (/^##?\s+/.test(line)) {
-      blocks.push(<h2 key={index}>{inline(line.replace(/^##?\s+/, ""))}</h2>);
-      index++;
-      continue;
-    }
-    const ordered = /^\d+[.)]\s+/.test(line);
-    const bullet = /^[-*•]\s+/.test(line);
-    if (ordered || bullet) {
-      const items: ReactNode[] = [];
-      const expression = ordered ? /^\d+[.)]\s+/ : /^[-*•]\s+/;
-      while (index < lines.length && expression.test(lines[index])) {
-        items.push(
-          <li key={index}>{inline(lines[index].replace(expression, ""))}</li>,
-        );
-        index++;
-      }
-      blocks.push(
-        ordered ? <ol key={index}>{items}</ol> : <ul key={index}>{items}</ul>,
-      );
-      continue;
-    }
-    if (!line.trim()) {
-      index++;
-      continue;
-    }
-    const paragraph: string[] = [line];
-    index++;
-    while (
-      index < lines.length &&
-      lines[index].trim() &&
-      !lines[index].startsWith("```") &&
-      !/^#{1,3}\s+/.test(lines[index]) &&
-      !/^([-*•]\s+|\d+[.)]\s+)/.test(lines[index])
-    )
-      paragraph.push(lines[index++]);
-    blocks.push(<p key={index}>{inline(paragraph.join(" "))}</p>);
-  }
-  return <div className="assistant-copy">{blocks}</div>;
-}
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string>();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [viewMode, setViewMode] = useState<"chat" | "graph">("chat");
   const historyRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
-    fetch("/api/conversations")
+    fetch(apiUrl("/api/conversations"))
       .then((r) => (r.ok ? r.json() : { conversations: [] }))
       .then((d) => setConversations(d.conversations));
   }, []);
+
   useEffect(() => {
     historyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [conversations]);
+
   const [text, setText] = useState("");
   const [model, setModel] = useState("openai/gpt-oss-20b");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -155,11 +69,11 @@ function App() {
   const [deleteChat, setDeleteChat] = useState<Conversation>();
   const [busy, setBusy] = useState(false);
   const selected = models.find((item) => item.id === model) ?? models[1];
-  const isNewChat = messages.length === 0 && !busy;
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploadMenu, setUploadMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const isInside = (event: PointerEvent, selector: string) =>
       event
@@ -184,16 +98,18 @@ function App() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, []);
+
   async function refreshConversations() {
-    const response = await fetch("/api/conversations");
+    const response = await fetch(apiUrl("/api/conversations"));
     if (response.ok) {
       const data = await response.json();
       setConversations(data.conversations);
     }
   }
+
   async function ensureConversation(): Promise<string> {
     if (conversationId) return conversationId;
-    const response = await fetch("/api/conversations", {
+    const response = await fetch(apiUrl("/api/conversations"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model }),
@@ -205,6 +121,7 @@ function App() {
     await refreshConversations();
     return data.id;
   }
+
   async function startNewConversation() {
     if (busy || uploading) return;
     setChatMenu(undefined);
@@ -218,6 +135,7 @@ function App() {
     setAttachments([]);
     setConversationId(undefined);
   }
+
   async function uploadFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
     event.target.value = "";
@@ -232,7 +150,7 @@ function App() {
         try {
           const form = new FormData();
           form.append("file", file);
-          const response = await fetch(`/api/conversations/${id}/documents`, {
+          const response = await fetch(apiUrl(`/api/conversations/${id}/documents`), {
             method: "POST",
             body: form,
           });
@@ -259,16 +177,18 @@ function App() {
       setUploading(false);
     }
   }
+
   async function togglePin(chat: Conversation) {
-    const response = await fetch(`/api/conversations/${chat.id}/pin`, {
+    const response = await fetch(apiUrl(`/api/conversations/${chat.id}/pin`), {
       method: "PATCH",
     });
     if (response.ok) await refreshConversations();
     setChatMenu(undefined);
   }
+
   async function confirmDelete() {
     if (!deleteChat) return;
-    const response = await fetch(`/api/conversations/${deleteChat.id}`, {
+    const response = await fetch(apiUrl(`/api/conversations/${deleteChat.id}`), {
       method: "DELETE",
     });
     if (response.ok) {
@@ -282,10 +202,11 @@ function App() {
     setDeleteChat(undefined);
     setChatMenu(undefined);
   }
+
   async function openConversation(id: string) {
     const [conversationResponse, documentResponse] = await Promise.all([
-      fetch(`/api/conversations/${id}`),
-      fetch(`/api/conversations/${id}/documents`),
+      fetch(apiUrl(`/api/conversations/${id}`)),
+      fetch(apiUrl(`/api/conversations/${id}/documents`)),
     ]);
     if (!conversationResponse.ok) return;
     const data = await conversationResponse.json();
@@ -310,10 +231,11 @@ function App() {
       );
     } else setAttachments([]);
   }
+
   async function removeAttachment(attachment: Attachment, index: number) {
     if (attachment.id && conversationId) {
       const response = await fetch(
-        `/api/conversations/${conversationId}/documents/${attachment.id}`,
+        apiUrl(`/api/conversations/${conversationId}/documents/${attachment.id}`),
         { method: "DELETE" },
       );
       if (!response.ok) {
@@ -326,6 +248,7 @@ function App() {
       items.filter((_, itemIndex) => itemIndex !== index),
     );
   }
+
   async function send(event: FormEvent) {
     event.preventDefault();
     if (!text.trim() || busy || uploading) return;
@@ -349,7 +272,7 @@ function App() {
     setText("");
     setBusy(true);
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(apiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -408,6 +331,7 @@ function App() {
       setBusy(false);
     }
   }
+
   return (
     <main>
       <aside>
@@ -476,68 +400,115 @@ function App() {
           </div>
         </footer>
       </aside>
-      <section>
+      <section className={viewMode === "graph" ? "graph-mode" : ""}>
         <header className="workspace-header">
-          <span>CHATBOARD / WORKSPACE</span>
-          <span className="model-badge">{selected.name}</span>
+          <div className="workspace-header-left">
+            <span>CHATBOARD / WORKSPACE</span>
+          </div>
+
+          <div className="workspace-header-center">
+            <div
+              className="view-mode-switcher"
+              role="tablist"
+              aria-label="View Mode Switcher"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "chat"}
+                className={`view-mode-btn ${viewMode === "chat" ? "active" : ""}`}
+                onClick={() => setViewMode("chat")}
+                title="Normal Chat View"
+              >
+                <span className="mode-icon">💬</span>
+                <span>Chat</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "graph"}
+                className={`view-mode-btn ${viewMode === "graph" ? "active" : ""}`}
+                onClick={() => setViewMode("graph")}
+                title="Interactive Conversation Graph"
+              >
+                <span className="mode-icon">☊</span>
+                <span>Graph View</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="workspace-header-right">
+            <span className="model-badge">{selected.name}</span>
+          </div>
         </header>
-        <div className="conversation">
-          {messages.map((message, index) => (
-            <article className={message.role} key={index}>
-              <i className="avatar">
-                {message.role === "assistant" ? "✦" : "A"}
-              </i>
-              <div>
-                {message.attachments && message.attachments.length > 0 && (
-                  <div className="message-attachments">
-                    {message.attachments.map((file) => (
-                      <div className="message-attachment" key={file.id}>
-                        <span className="message-file-icon">
-                          {file.content_type?.includes("pdf") ? "PDF" : "DOC"}
-                        </span>
-                        <span>
-                          <strong>{file.filename}</strong>
-                          <small>
-                            {file.content_type
-                              ?.split("/")
-                              .pop()
-                              ?.toUpperCase() || "File"}
-                          </small>
-                        </span>
-                      </div>
-                    ))}
+
+        {viewMode === "graph" ? (
+          <ConversationGraph
+            messages={messages}
+            modelName={selected.name}
+            busy={busy}
+            onSwitchToChat={() => setViewMode("chat")}
+          />
+        ) : (
+          <div className="conversation">
+            {messages.map((message, index) => (
+              <article className={message.role} key={index}>
+                <i className="avatar">
+                  {message.role === "assistant" ? "✦" : "A"}
+                </i>
+                <div>
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="message-attachments">
+                      {message.attachments.map((file) => (
+                        <div className="message-attachment" key={file.id}>
+                          <span className="message-file-icon">
+                            {file.content_type?.includes("pdf") ? "PDF" : "DOC"}
+                          </span>
+                          <span>
+                            <strong>{file.filename}</strong>
+                            <small>
+                              {file.content_type
+                                ?.split("/")
+                                .pop()
+                                ?.toUpperCase() || "File"}
+                            </small>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="message-meta">
+                    <small>{message.role}</small>
+                    {message.role === "assistant" && (
+                      <span className="model-name">{selected.name}</span>
+                    )}
                   </div>
-                )}
-                <div className="message-meta">
-                  <small>{message.role}</small>
-                  {message.role === "assistant" && (
-                    <span className="model-name">{selected.name}</span>
+                  {message.role === "assistant" ? (
+                    <Reply content={message.content} />
+                  ) : (
+                    <p className="user-copy">{message.content}</p>
                   )}
                 </div>
-                {message.role === "assistant" ? (
-                  <Reply content={message.content} />
-                ) : (
-                  <p className="user-copy">{message.content}</p>
-                )}
-              </div>
-            </article>
-          ))}
-          {busy && (
-            <article>
-              <i className="avatar">✦</i>
-              <div>
-                <div className="message-meta">
-                  <small>assistant</small>
-                  <span className="model-name">{selected.name}</span>
+              </article>
+            ))}
+            {busy && (
+              <article>
+                <i className="avatar">✦</i>
+                <div>
+                  <div className="message-meta">
+                    <small>assistant</small>
+                    <span className="model-name">{selected.name}</span>
+                  </div>
+                  <p className="thinking">
+                    Thinking
+                    <span className="thinking-dots" />
+                  </p>
                 </div>
-                <p className="thinking">
-                  Thinking
-                  <span className="thinking-dots" />
-                </p>
-              </div>
-            </article>
-          )}
-        </div>
+              </article>
+            )}
+          </div>
+        )}
+
         <form
           onSubmit={send}
           onKeyDownCapture={(event) => {
@@ -703,4 +674,5 @@ function App() {
     </main>
   );
 }
+
 createRoot(document.getElementById("root")!).render(<App />);
