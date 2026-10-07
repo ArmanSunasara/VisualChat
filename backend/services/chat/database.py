@@ -36,5 +36,15 @@ def init_chat_schema():
             );
             CREATE INDEX IF NOT EXISTS conversation_memories_conversation_idx
             ON conversation_memories (conversation_id, updated_at DESC);
+            -- Branch metadata: a branch is a regular conversation that
+            -- optionally links to a parent conversation at a specific turn
+            -- index (0-based pair count of user+assistant message pairs).
+            -- context_mode = 'inherit' | 'independent'
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS parent_conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS parent_turn_index INTEGER;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS context_mode TEXT NOT NULL DEFAULT 'inherit';
+            CREATE INDEX IF NOT EXISTS conversations_parent_idx
+            ON conversations (parent_conversation_id)
+            WHERE parent_conversation_id IS NOT NULL;
             """
         )

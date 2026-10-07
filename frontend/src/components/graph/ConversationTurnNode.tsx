@@ -6,10 +6,13 @@ export const ConversationTurnNode = memo(function ConversationTurnNode({
   data,
   selected,
 }: NodeProps<TurnNodeType>) {
-  const { turn, modelName } = data;
+  const { turn, modelName, branches = [], onCreateBranch, onOpenBranch } = data;
   const userText = turn.userMessage.content.trim();
   const assistantText = turn.assistantMessage?.content?.trim();
   const attachmentCount = turn.userMessage.attachments?.length || 0;
+  // Only show branch button when there's a complete turn (user + assistant)
+  const canBranch = !!turn.assistantMessage && !turn.isGenerating;
+  const branchCount = branches.length;
 
   return (
     <div
@@ -31,6 +34,11 @@ export const ConversationTurnNode = memo(function ConversationTurnNode({
           )}
         </div>
         <div className="node-header-tags">
+          {branchCount > 0 && (
+            <span className="node-branch-count" title={`${branchCount} branch${branchCount > 1 ? "es" : ""}`}>
+              ⎇ {branchCount}
+            </span>
+          )}
           {attachmentCount > 0 && (
             <span
               className="node-attachment-badge"
@@ -81,13 +89,44 @@ export const ConversationTurnNode = memo(function ConversationTurnNode({
       </div>
 
       <div className="node-footer">
-        <span className="click-hint">Click turn for full details ↗</span>
+        <span className="click-hint">Click for full details ↗</span>
+        {canBranch && (
+          <button
+            className="node-branch-btn"
+            title="Create a branch from this turn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCreateBranch?.(turn.turnNumber - 1);
+            }}
+          >
+            ⎇ Branch
+          </button>
+        )}
+        {branchCount > 0 && onOpenBranch && (
+          <button
+            className="node-show-branches-btn"
+            title="Show branches"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (branches[0]) onOpenBranch(branches[0]);
+            }}
+          >
+            ⎇ {branchCount}
+          </button>
+        )}
       </div>
 
       <Handle
         type="source"
         position={Position.Right}
         className="graph-node-handle source-handle"
+      />
+      {/* Bottom handle for branches to connect to */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="graph-node-handle branch-attach-handle"
+        id="branch-out"
       />
     </div>
   );

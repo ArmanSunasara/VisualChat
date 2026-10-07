@@ -1,5 +1,19 @@
 /* Conversation Graph View Styles */
 
+/* Split wrapper: graph on left, branch chat panel on right */
+.graph-split-wrapper {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.graph-split-wrapper .conversation-graph-container {
+  flex: 1;
+  min-width: 0;
+}
+
 .conversation-graph-container {
   display: flex;
   flex-direction: column;
@@ -340,7 +354,10 @@
   padding-top: 6px;
   border-top: 1px dashed #202d25;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .click-hint {
@@ -352,6 +369,73 @@
 
 .conversation-graph-node:hover .click-hint {
   color: #b9f16e;
+}
+
+.node-branch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid #4b6655;
+  border-radius: 6px;
+  background: #182a1f;
+  color: #b9f16e;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.node-branch-btn:hover {
+  background: #253f2e;
+  border-color: #7ab558;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(185, 241, 110, 0.15);
+}
+
+.node-show-branches-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid #3a5044;
+  border-radius: 6px;
+  background: #162117;
+  color: #9ed47a;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.node-show-branches-btn:hover {
+  background: #1f3226;
+  border-color: #5a7c64;
+}
+
+.node-branch-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: #1b2d21;
+  border: 1px solid #2f4836;
+  color: #b9f16e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.graph-branch-pill {
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: #1b2d21;
+  border: 1px solid #2f4836;
+  color: #8be04e;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 /* Node Details Panel (Slide-Over Drawer) */
@@ -777,6 +861,9 @@ section.graph-mode {
   width: 100% !important;
   max-width: 100% !important;
   padding: 20px 28px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
 }
 
 @media (max-width: 768px) {
@@ -789,4 +876,645 @@ section.graph-mode {
   .graph-actions .graph-hint {
     display: none;
   }
+  .branch-chat-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .graph-split-wrapper {
+    flex-direction: column;
+  }
+}
+
+/* ============================================================
+   Branch Conversation Node
+   ============================================================ */
+
+.branch-graph-node {
+  width: 250px;
+  padding: 12px 13px 10px;
+  background: #0f1c14;
+  border: 1.5px solid #2b4035;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+  position: relative;
+  user-select: none;
+}
+
+.branch-graph-node:hover {
+  border-color: #4d7057;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55), 0 0 12px rgba(139, 224, 78, 0.08);
+}
+
+.branch-graph-node.selected {
+  border-color: #8be04e;
+  box-shadow: 0 0 0 2px rgba(139, 224, 78, 0.25), 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+.branch-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.branch-node-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.branch-icon {
+  font-size: 12px;
+  color: #8be04e;
+}
+
+.branch-label {
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #7caa60;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.branch-ctx-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.inherit-badge {
+  background: #1a2f1e;
+  border: 1px solid #2f4f35;
+  color: #8bca70;
+}
+
+.independent-badge {
+  background: #2a2518;
+  border: 1px solid #4a3d22;
+  color: #c4aa5a;
+}
+
+.branch-node-stats {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.branch-turn-count {
+  font-size: 9px;
+  color: #6a8272;
+  font-weight: 600;
+}
+
+.branch-node-body {
+  min-height: 40px;
+}
+
+.branch-empty-hint {
+  color: #5a7268;
+  font-size: 10.5px;
+  line-height: 1.5;
+  margin: 0;
+  font-style: italic;
+}
+
+.branch-node-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin-bottom: 5px;
+}
+
+.branch-user-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  background: #2b3e32;
+  color: #e2ede3;
+  flex: none;
+  margin-top: 1px;
+}
+
+.branch-node-response-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px dashed #1e3028;
+}
+
+.branch-response-label {
+  font-size: 9.5px;
+  color: #7ea882;
+}
+
+.branch-node-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #1e3028;
+}
+
+.branch-open-btn {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #3a5a45;
+  border-radius: 6px;
+  background: #182a1f;
+  color: #a8e08a;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.branch-open-btn:hover {
+  background: #243d2c;
+  border-color: #5a7a60;
+}
+
+.branch-new-sub-btn {
+  padding: 4px 7px;
+  border: 1px solid #3a4a40;
+  border-radius: 6px;
+  background: #141f18;
+  color: #7a9a82;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-new-sub-btn:hover {
+  background: #1e3028;
+  border-color: #4a6a52;
+  color: #b9f16e;
+}
+
+/* Branch handle overrides */
+.branch-target-handle,
+.branch-source-handle {
+  background: #8be04e !important;
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.branch-target-handle-left,
+.branch-source-handle-right,
+.branch-attach-handle {
+  opacity: 0 !important;
+}
+
+/* ============================================================
+   Branch Creation Dialog
+   ============================================================ */
+
+.branch-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.branch-dialog {
+  width: min(460px, 100%);
+  background: #111d16;
+  border: 1px solid #2c4136;
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.8);
+  animation: dialogPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dialogPop {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.branch-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #253830;
+}
+
+.branch-dialog-icon {
+  font-size: 18px;
+  color: #8be04e;
+}
+
+.branch-dialog-header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #e8f2e9;
+}
+
+.branch-dialog-close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #2e4039;
+  border-radius: 7px;
+  background: #182620;
+  color: #8fa398;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-dialog-close:hover {
+  background: #25382e;
+  color: #fff;
+}
+
+.branch-dialog-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.branch-dialog-info p {
+  margin: 0 0 5px;
+  font-size: 13px;
+  color: #d8e5da;
+}
+
+.branch-dialog-info small {
+  font-size: 11px;
+  color: #7a9080;
+  line-height: 1.5;
+}
+
+.branch-parent-title {
+  color: #b9f16e;
+  font-style: normal;
+}
+
+.branch-context-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8a9f90;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.branch-context-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.branch-option {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #2c4036;
+  border-radius: 10px;
+  background: #141f18;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-option:hover {
+  border-color: #3e5c48;
+  background: #192620;
+}
+
+.branch-option.selected {
+  border-color: #5a9168;
+  background: #1a2e22;
+  box-shadow: 0 0 0 2px rgba(90, 145, 104, 0.15);
+}
+
+.branch-option input[type="radio"] {
+  display: none;
+}
+
+.branch-option-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.branch-option-icon {
+  font-size: 16px;
+  flex: none;
+}
+
+.branch-option-content > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.branch-option-content strong {
+  font-size: 12.5px;
+  color: #e2ede3;
+}
+
+.branch-option-content small {
+  font-size: 11px;
+  color: #7a9080;
+  line-height: 1.45;
+}
+
+.branch-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid #253830;
+}
+
+.branch-cancel-btn {
+  padding: 8px 14px;
+  border: 1px solid #2e4039;
+  border-radius: 8px;
+  background: #182620;
+  color: #9dafa4;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-cancel-btn:hover {
+  background: #233830;
+  color: #d8e5da;
+}
+
+.branch-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #b9f16e;
+  color: #122015;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-confirm-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 14px rgba(185, 241, 110, 0.3);
+  transform: translateY(-1px);
+}
+
+.branch-confirm-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.small-dot {
+  width: 8px;
+  height: 8px;
+}
+
+/* ============================================================
+   Branch Chat Panel (Side Panel next to Graph)
+   ============================================================ */
+
+.branch-chat-panel {
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  min-width: 300px;
+  max-width: 420px;
+  background: #0e1914;
+  border: 1px solid #233229;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  flex: none;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.branch-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: #111a14;
+  border-bottom: 1px solid #1e2e24;
+  flex: none;
+}
+
+.branch-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.branch-icon-large {
+  font-size: 16px;
+  color: #8be04e;
+}
+
+.branch-chat-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2ede3;
+}
+
+.branch-ctx-tag {
+  display: block;
+  font-size: 9.5px;
+  color: #7a9080;
+  margin-top: 1px;
+}
+
+.branch-ctx-tag.inherit { color: #7aaa70; }
+.branch-ctx-tag.independent { color: #aaa070; }
+
+.branch-chat-close {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #2c3e33;
+  border-radius: 7px;
+  background: #182420;
+  color: #8fa398;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-chat-close:hover {
+  background: #253830;
+  color: #fff;
+}
+
+.branch-context-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 14px;
+  background: #131f17;
+  border-bottom: 1px solid #1e2f24;
+  font-size: 10.5px;
+  color: #7ead78;
+  line-height: 1.45;
+  flex: none;
+}
+
+.branch-chat-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.branch-chat-messages::-webkit-scrollbar { width: 4px; }
+.branch-chat-messages::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: #2a3c31;
+}
+
+.branch-chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 24px 12px;
+  text-align: center;
+  color: #6a8272;
+}
+
+.branch-empty-icon {
+  font-size: 28px;
+  margin-bottom: 10px;
+  color: #3d5c48;
+}
+
+.branch-chat-empty p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.branch-message {
+  display: flex;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.branch-message.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.branch-avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+.branch-message-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.branch-chat-form {
+  flex: none;
+  padding: 10px 12px;
+  border-top: 1px solid #1e2e24;
+  background: #111914;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.branch-chat-input {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  max-height: 120px;
+  resize: none;
+  border: 1px solid #2c3e33;
+  border-radius: 9px;
+  background: #0e1712;
+  color: #edf5ed;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.branch-chat-input:focus { border-color: #4a7a58; }
+.branch-chat-input::placeholder { color: #5a7268; }
+
+.branch-chat-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.branch-model-label {
+  font-size: 10px;
+  color: #6a8272;
+  font-weight: 600;
+}
+
+.branch-send-btn {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: #b9f16e;
+  color: #122015;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-send-btn:hover:not(:disabled) {
+  box-shadow: 0 3px 10px rgba(185, 241, 110, 0.25);
+}
+
+.branch-send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
