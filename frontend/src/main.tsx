@@ -58,14 +58,10 @@ const models: Model[] = [
   },
 ];
 
-// Leave this empty for Vite's local /api proxy. Set VITE_API_BASE_URL when the
-// frontend and API are deployed on different domains.
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-const apiUrl = (path: string) => `${apiBaseUrl}${path}`;
-
 function App() {
   const { isSignedIn, user } = useUser();
-  const { openSignIn } = useClerk();
+  const { getToken, userId } = useAuth();
+  const { openSignIn, signOut } = useClerk();
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string>();
   const [conversationTitle, setConversationTitle] = useState<string>();
@@ -75,10 +71,22 @@ function App() {
   const historyRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    fetch(apiUrl("/api/conversations"))
-      .then((r) => (r.ok ? r.json() : { conversations: [] }))
-      .then((d) => setConversations(d.conversations));
-  }, []);
+    setAuthContext(getToken, userId);
+  }, [getToken, userId]);
+
+  useEffect(() => {
+    if (isSignedIn && userId) {
+      authFetch(apiUrl("/api/conversations"))
+        .then((r) => (r.ok ? r.json() : { conversations: [] }))
+        .then((d) => setConversations(d.conversations || []))
+        .catch(() => setConversations([]));
+    } else {
+      setConversations([]);
+      setConversationId(undefined);
+      setMessages([]);
+      setAttachments([]);
+    }
+  }, [isSignedIn, userId]);
 
   useEffect(() => {
     historyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -122,16 +130,17 @@ function App() {
   }, []);
 
   async function refreshConversations() {
-    const response = await fetch(apiUrl("/api/conversations"));
+    if (!isSignedIn) return;
+    const response = await authFetch(apiUrl("/api/conversations"));
     if (response.ok) {
       const data = await response.json();
-      setConversations(data.conversations);
+      setConversations(data.conversations || []);
     }
   }
 
   async function ensureConversation(): Promise<string> {
     if (conversationId) return conversationId;
-    const response = await fetch(apiUrl("/api/conversations"), {
+    const response = await authFetch(apiUrl("/api/conversations"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model }),
@@ -180,7 +189,7 @@ function App() {
         try {
           const form = new FormData();
           form.append("file", file);
-          const response = await fetch(apiUrl(`/api/conversations/${id}/documents`), {
+          const response = await authFetch(apiUrl(`/api/conversations/${id}/documents`), {
             method: "POST",
             body: form,
           });
@@ -209,7 +218,7 @@ function App() {
   }
 
   async function togglePin(chat: Conversation) {
-    const response = await fetch(apiUrl(`/api/conversations/${chat.id}/pin`), {
+    const response = await authFetch(apiUrl(`/api/conversations/${chat.id}/pin`), {
       method: "PATCH",
     });
     if (response.ok) await refreshConversations();
@@ -218,7 +227,7 @@ function App() {
 
   async function confirmDelete() {
     if (!deleteChat) return;
-    const response = await fetch(apiUrl(`/api/conversations/${deleteChat.id}`), {
+    const response = await authFetch(apiUrl(`/api/conversations/${deleteChat.id}`), {
       method: "DELETE",
     });
     if (response.ok) {
@@ -235,8 +244,8 @@ function App() {
 
   async function openConversation(id: string) {
     const [conversationResponse, documentResponse] = await Promise.all([
-      fetch(apiUrl(`/api/conversations/${id}`)),
-      fetch(apiUrl(`/api/conversations/${id}/documents`)),
+      authFetch(apiUrl(`/api/conversations/${id}`)),
+      authFetch(apiUrl(`/api/conversations/${id}/documents`)),
     ]);
     if (!conversationResponse.ok) return;
     const data = await conversationResponse.json();
@@ -266,7 +275,7 @@ function App() {
 
   async function removeAttachment(attachment: Attachment, index: number) {
     if (attachment.id && conversationId) {
-      const response = await fetch(
+      const response = await authFetch(
         apiUrl(`/api/conversations/${conversationId}/documents/${attachment.id}`),
         { method: "DELETE" },
       );
@@ -308,7 +317,7 @@ function App() {
     setText("");
     setBusy(true);
     try {
-      const response = await fetch(apiUrl("/api/chat"), {
+      const response = await authFetch(apiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -452,6 +461,18 @@ function App() {
                   {user?.primaryEmailAddress?.emailAddress || "Signed in"}
                 </small>
               </div>
+              <button
+                type="button"
+                className="sidebar-logout-btn"
+                title="Log out"
+                onClick={() => signOut()}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
             </div>
           </Show>
         </footer>

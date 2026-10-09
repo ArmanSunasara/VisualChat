@@ -251,6 +251,26 @@ nav {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.sidebar-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #77837b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.sidebar-logout-btn:hover {
+  background: #25332b;
+  border-color: #3b4e43;
+  color: #ff9a94;
+}
 section {
   display: flex;
   flex-direction: column;
