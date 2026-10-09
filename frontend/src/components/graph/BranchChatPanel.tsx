@@ -1,6 +1,8 @@
 import { useState, useRef, FormEvent } from "react";
+import { useUser, useClerk } from "@clerk/react";
 import { BranchConversation, Message } from "../../types";
 import { Reply } from "../Reply";
+import { authFetch, apiUrl } from "../../api";
 
 interface BranchChatPanelProps {
   branch: BranchConversation;
@@ -9,15 +11,14 @@ interface BranchChatPanelProps {
   onBranchUpdated?: (branch: BranchConversation, newMessages: Message[]) => void;
 }
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-const apiUrl = (path: string) => `${apiBaseUrl}${path}`;
-
 export function BranchChatPanel({
   branch,
   modelName,
   onClose,
   onBranchUpdated,
 }: BranchChatPanelProps) {
+  const { isSignedIn } = useUser();
+  const { openSignIn } = useClerk();
   const [messages, setMessages] = useState<Message[]>(branch.messages || []);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,6 +31,10 @@ export function BranchChatPanel({
 
   async function send(event: FormEvent) {
     event.preventDefault();
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
     if (!text.trim() || busy) return;
     const message = text.trim();
     const assistantIndex = messages.length + 1;
@@ -43,7 +48,7 @@ export function BranchChatPanel({
     setBusy(true);
 
     try {
-      const response = await fetch(apiUrl("/api/chat"), {
+      const response = await authFetch(apiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

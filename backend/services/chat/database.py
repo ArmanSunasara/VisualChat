@@ -16,6 +16,8 @@ def init_chat_schema():
                 updated_at TIMESTAMPTZ DEFAULT now()
             );
             ALTER TABLE conversations ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id TEXT;
+            CREATE INDEX IF NOT EXISTS conversations_user_id_idx ON conversations(user_id);
             -- The old table stored memory globally, so its rows cannot be
             -- safely assigned to a single conversation. Remove it rather
             -- than retain data that would outlive a deleted chat.

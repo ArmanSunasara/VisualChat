@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BranchConversation, Message } from "../../types";
 import { Reply } from "../Reply";
 import { convertMessagesToTurns } from "./ConversationGraph";
+import { authFetch, apiUrl } from "../../api";
 
 interface BranchDetailsPanelProps {
   branch: BranchConversation;
@@ -25,8 +26,7 @@ export function BranchDetailsPanel({
 
     async function fetchLatestMessages() {
       try {
-        const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-        const resp = await fetch(`${apiBaseUrl}/api/conversations/${branch.id}`);
+        const resp = await authFetch(apiUrl(`/api/conversations/${branch.id}`));
         if (!resp.ok) return;
         const data = await resp.json();
         if (data.messages) {

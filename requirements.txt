@@ -13,3 +13,4 @@ python-multipart
 sentence-transformers
 httpx
 beautifulsoup4
+pyjwt[crypto]

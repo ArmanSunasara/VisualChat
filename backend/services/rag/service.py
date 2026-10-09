@@ -14,8 +14,11 @@ from backend.services.rag.document_parser import (
 from backend.services.rag.retrieval import index_document
 
 
-def list_documents(conversation_id: UUID):
+def list_documents(conversation_id: UUID, user_id: str):
     with db() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM conversations WHERE id=%s AND user_id=%s", (conversation_id, user_id))
+        if not cursor.fetchone():
+            return {"documents": []}
         cursor.execute(
             "SELECT id,filename,content_type,created_at FROM documents WHERE conversation_id=%s ORDER BY created_at",
             (conversation_id,),
@@ -28,7 +31,7 @@ def list_documents(conversation_id: UUID):
         }
 
 
-def store_and_index(conversation_id: UUID, filename: str, content_type: str, data: bytes):
+def store_and_index(conversation_id: UUID, filename: str, content_type: str, data: bytes, user_id: str):
     safe_filename = Path(filename or "upload").name
     if Path(safe_filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise HTTPException(415, "Upload a PDF, DOCX, PPTX, CSV, TXT, or JSON file.")
@@ -46,6 +49,13 @@ def store_and_index(conversation_id: UUID, filename: str, content_type: str, dat
     document_id = uuid4()
     try:
         with db() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT user_id FROM conversations WHERE id=%s", (conversation_id,))
+            row = cursor.fetchone()
+            if not row:
+                cursor.execute("INSERT INTO conversations(id,user_id) VALUES (%s,%s)", (conversation_id, user_id))
+            elif row[0] is not None and row[0] != user_id:
+                raise HTTPException(403, "Access denied to this conversation.")
+
             cursor.execute(
                 "INSERT INTO documents(id,conversation_id,filename,content_type,file_data) VALUES (%s,%s,%s,%s,%s)",
                 (document_id, conversation_id, safe_filename, content_type or "application/octet-stream", data),
@@ -63,8 +73,11 @@ def store_and_index(conversation_id: UUID, filename: str, content_type: str, dat
     }
 
 
-def delete_document(conversation_id: UUID, document_id: UUID):
+def delete_document(conversation_id: UUID, document_id: UUID, user_id: str):
     with db() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM conversations WHERE id=%s AND user_id=%s", (conversation_id, user_id))
+        if not cursor.fetchone():
+            raise HTTPException(404, "Conversation not found")
         cursor.execute(
             "DELETE FROM documents WHERE id=%s AND conversation_id=%s RETURNING id",
             (document_id, conversation_id),

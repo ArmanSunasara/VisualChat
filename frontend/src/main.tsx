@@ -1,4 +1,14 @@
 import {
+  ClerkProvider,
+  SignInButton,
+  SignUpButton,
+  Show,
+  UserButton,
+  useUser,
+  useAuth,
+  useClerk,
+} from "@clerk/react";
+import {
   useState,
   useEffect,
   useRef,
@@ -6,6 +16,7 @@ import {
   ChangeEvent,
 } from "react";
 import { createRoot } from "react-dom/client";
+import { authFetch, apiUrl, setAuthContext } from "./api";
 import {
   Attachment,
   Message,
@@ -20,6 +31,11 @@ import { BranchChatPanel } from "./components/graph/BranchChatPanel";
 import "./style.css";
 // @ts-expect-error CSS is bundled by the frontend build tool.
 import "./empty-chat.css";
+
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+if (!PUBLISHABLE_KEY) {
+  throw new Error("Missing Publishable Key: VITE_CLERK_PUBLISHABLE_KEY is required in .env");
+}
 
 const models: Model[] = [
   {
@@ -48,6 +64,8 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "")
 const apiUrl = (path: string) => `${apiBaseUrl}${path}`;
 
 function App() {
+  const { isSignedIn, user } = useUser();
+  const { openSignIn } = useClerk();
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string>();
   const [conversationTitle, setConversationTitle] = useState<string>();
@@ -127,6 +145,10 @@ function App() {
   }
 
   async function startNewConversation() {
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
     if (busy || uploading) return;
     setChatMenu(undefined);
     if (!messages.length) {
@@ -141,6 +163,10 @@ function App() {
   }
 
   async function uploadFiles(event: ChangeEvent<HTMLInputElement>) {
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
     const files = Array.from(event.target.files || []);
     event.target.value = "";
     if (!files.length) return;
@@ -257,6 +283,10 @@ function App() {
 
   async function send(event: FormEvent) {
     event.preventDefault();
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
     if (!text.trim() || busy || uploading) return;
     const message = text.trim();
     const attachedFiles = attachments
@@ -399,11 +429,31 @@ function App() {
           ))}
         </nav>
         <footer className="sidebar-footer">
-          <span>CB</span>
-          <div>
-            <strong>ChatBoard</strong>
-            <small>Document assistant</small>
-          </div>
+          <Show when="signed-out">
+            <div className="sidebar-auth-group">
+              <SignInButton mode="modal">
+                <button className="sidebar-auth-btn sidebar-signin-btn">
+                  Log In
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="sidebar-auth-btn sidebar-signup-btn">
+                  Sign Up
+                </button>
+              </SignUpButton>
+            </div>
+          </Show>
+          <Show when="signed-in">
+            <div className="sidebar-user-card">
+              <UserButton />
+              <div className="sidebar-user-meta">
+                <strong>{user?.fullName || user?.firstName || user?.username || "Account"}</strong>
+                <small title={user?.primaryEmailAddress?.emailAddress || ""}>
+                  {user?.primaryEmailAddress?.emailAddress || "Signed in"}
+                </small>
+              </div>
+            </div>
+          </Show>
         </footer>
       </aside>
       <section className={viewMode === "graph" ? "graph-mode" : ""}>
@@ -547,6 +597,10 @@ function App() {
               !event.nativeEvent.isComposing
             ) {
               event.preventDefault();
+              if (!isSignedIn) {
+                openSignIn();
+                return;
+              }
               if (!busy && !uploading && input.value.trim())
                 event.currentTarget.requestSubmit();
             }
@@ -703,4 +757,8 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+    <App />
+  </ClerkProvider>
+);

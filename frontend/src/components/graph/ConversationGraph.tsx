@@ -21,6 +21,7 @@ import { NodeDetailsPanel } from "./NodeDetailsPanel";
 import { BranchDetailsPanel } from "./BranchDetailsPanel";
 import { BranchCreationDialog } from "./BranchCreationDialog";
 import { TurnNodeType, BranchNodeType, TurnEdgeType } from "./types";
+import { authFetch, apiUrl } from "../../api";
 import "./graph.css";
 
 const nodeTypes = {
@@ -159,8 +160,7 @@ function InnerGraph({
 
   async function fetchBranches(convId: string) {
     try {
-      const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-      const resp = await fetch(`${apiBaseUrl}/api/conversations/${convId}/branches`);
+      const resp = await authFetch(apiUrl(`/api/conversations/${convId}/branches`));
       if (!resp.ok) return;
       const data = await resp.json();
       const map: BranchMap = {};
@@ -179,9 +179,8 @@ function InnerGraph({
     if (!branchDialog || !conversationId) return;
     setCreatingBranch(true);
     try {
-      const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-      const resp = await fetch(
-        `${apiBaseUrl}/api/conversations/${branchDialog.parentConversationId}/branches`,
+      const resp = await authFetch(
+        apiUrl(`/api/conversations/${branchDialog.parentConversationId}/branches`),
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

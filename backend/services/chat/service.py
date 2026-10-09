@@ -165,22 +165,23 @@ def conversation_card(row):
     }
 
 
-def list_conversations():
+def list_conversations(user_id: str):
     with db() as connection, connection.cursor() as cursor:
         cursor.execute(
             """SELECT id,title,model,created_at,updated_at,pinned,
                       parent_conversation_id,parent_turn_index,context_mode
                FROM conversations
-               WHERE parent_conversation_id IS NULL
-               ORDER BY pinned DESC,updated_at DESC"""
+               WHERE parent_conversation_id IS NULL AND user_id = %s
+               ORDER BY pinned DESC,updated_at DESC""",
+            (user_id,),
         )
         return {"conversations": [conversation_card(row) for row in cursor.fetchall()]}
 
 
-def create_conversation(model: str | None):
+def create_conversation(model: str | None, user_id: str):
     conversation_id = uuid4()
     with db() as connection, connection.cursor() as cursor:
-        cursor.execute("INSERT INTO conversations(id,model) VALUES (%s,%s)", (conversation_id, model))
+        cursor.execute("INSERT INTO conversations(id,model,user_id) VALUES (%s,%s,%s)", (conversation_id, model, user_id))
     return {
         "id": str(conversation_id),
         "title": "New chat",
@@ -192,13 +193,13 @@ def create_conversation(model: str | None):
     }
 
 
-def get_conversation(conversation_id: UUID):
+def get_conversation(conversation_id: UUID, user_id: str):
     with db() as connection, connection.cursor() as cursor:
         cursor.execute(
             """SELECT id,title,model,created_at,updated_at,pinned,
                       parent_conversation_id,parent_turn_index,context_mode
-               FROM conversations WHERE id=%s""",
-            (conversation_id,),
+               FROM conversations WHERE id=%s AND user_id=%s""",
+            (conversation_id, user_id),
         )
         row = cursor.fetchone()
         if not row:
@@ -224,11 +225,11 @@ def get_conversation(conversation_id: UUID):
         }
 
 
-def toggle_pin(conversation_id: UUID):
+def toggle_pin(conversation_id: UUID, user_id: str):
     with db() as connection, connection.cursor() as cursor:
         cursor.execute(
-            "UPDATE conversations SET pinned=NOT pinned WHERE id=%s RETURNING pinned",
-            (conversation_id,),
+            "UPDATE conversations SET pinned=NOT pinned WHERE id=%s AND user_id=%s RETURNING pinned",
+            (conversation_id, user_id),
         )
         row = cursor.fetchone()
         if not row:
@@ -236,9 +237,9 @@ def toggle_pin(conversation_id: UUID):
         return {"id": str(conversation_id), "pinned": row[0]}
 
 
-def delete_conversation(conversation_id: UUID):
+def delete_conversation(conversation_id: UUID, user_id: str):
     with db() as connection, connection.cursor() as cursor:
-        cursor.execute("DELETE FROM conversations WHERE id=%s RETURNING id", (conversation_id,))
+        cursor.execute("DELETE FROM conversations WHERE id=%s AND user_id=%s RETURNING id", (conversation_id, user_id))
         if not cursor.fetchone():
             raise HTTPException(404, "Conversation not found")
     return {"deleted": True}
@@ -316,20 +317,20 @@ def _build_inherited_history(
     return [(AIMessage if role == "assistant" else HumanMessage)(content=content) for role, content in flat]
 
 
-def create_branch(request: CreateBranchRequest) -> dict:
+def create_branch(request: CreateBranchRequest, user_id: str) -> dict:
     """Create a new branch conversation linked to a parent conversation turn."""
     branch_id = uuid4()
     with db() as connection, connection.cursor() as cursor:
-        # Verify parent exists
-        cursor.execute("SELECT id,model FROM conversations WHERE id=%s", (request.parent_conversation_id,))
+        # Verify parent exists and belongs to this user
+        cursor.execute("SELECT id,model FROM conversations WHERE id=%s AND user_id=%s", (request.parent_conversation_id, user_id))
         parent = cursor.fetchone()
         if not parent:
             raise HTTPException(404, "Parent conversation not found")
         model = request.model or parent[1]
         cursor.execute(
-            """INSERT INTO conversations(id,model,title,parent_conversation_id,parent_turn_index,context_mode)
-               VALUES(%s,%s,'Branch',%s,%s,%s)""",
-            (branch_id, model, request.parent_conversation_id, request.parent_turn_index, request.context_mode),
+            """INSERT INTO conversations(id,model,title,parent_conversation_id,parent_turn_index,context_mode,user_id)
+               VALUES(%s,%s,'Branch',%s,%s,%s,%s)""",
+            (branch_id, model, request.parent_conversation_id, request.parent_turn_index, request.context_mode, user_id),
         )
     return {
         "id": str(branch_id),
@@ -342,16 +343,19 @@ def create_branch(request: CreateBranchRequest) -> dict:
     }
 
 
-def list_branches(conversation_id: UUID) -> dict:
-    """Return all direct branches off a given conversation."""
+def list_branches(conversation_id: UUID, user_id: str) -> dict:
+    """Return all direct branches off a given conversation for this user."""
     with db() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM conversations WHERE id=%s AND user_id=%s", (conversation_id, user_id))
+        if not cursor.fetchone():
+            raise HTTPException(404, "Conversation not found")
         cursor.execute(
             """SELECT id,title,model,created_at,updated_at,pinned,
                       parent_conversation_id,parent_turn_index,context_mode
                FROM conversations
-               WHERE parent_conversation_id=%s
+               WHERE parent_conversation_id=%s AND user_id=%s
                ORDER BY parent_turn_index ASC, created_at ASC""",
-            (conversation_id,),
+            (conversation_id, user_id),
         )
         branches = []
         for row in cursor.fetchall():
@@ -365,28 +369,33 @@ def list_branches(conversation_id: UUID) -> dict:
             branch["messages"] = [{"role": r, "content": c} for r, c in msgs]
             # Also fetch sub-branches recursively
             cursor.execute(
-                """SELECT id FROM conversations WHERE parent_conversation_id=%s""",
-                (row[0],),
+                """SELECT id FROM conversations WHERE parent_conversation_id=%s AND user_id=%s""",
+                (row[0], user_id),
             )
             branch["has_children"] = cursor.fetchone() is not None
             branches.append(branch)
         return {"branches": branches}
 
 
-def send_message(request: ChatRequest):
+def send_message(request: ChatRequest, user_id: str):
     conversation_id = request.conversation_id or uuid4()
     with db() as connection, connection.cursor() as cursor:
         cursor.execute(
-            "SELECT title,model,parent_conversation_id,parent_turn_index,context_mode FROM conversations WHERE id=%s",
+            "SELECT title,model,parent_conversation_id,parent_turn_index,context_mode,user_id FROM conversations WHERE id=%s",
             (conversation_id,),
         )
         conversation = cursor.fetchone()
         if not conversation:
             cursor.execute(
-                "INSERT INTO conversations(id,model) VALUES(%s,%s)",
-                (conversation_id, request.model),
+                "INSERT INTO conversations(id,model,user_id) VALUES(%s,%s,%s)",
+                (conversation_id, request.model, user_id),
             )
-            conversation = ("New chat", request.model, None, None, "inherit")
+            conversation = ("New chat", request.model, None, None, "inherit", user_id)
+        else:
+            if conversation[5] is not None and conversation[5] != user_id:
+                raise HTTPException(403, "Access denied to this conversation.")
+            if conversation[5] is None:
+                cursor.execute("UPDATE conversations SET user_id=%s WHERE id=%s", (user_id, conversation_id))
 
         # Build message history with branch context awareness
         if conversation[2] is not None and conversation[4] == "inherit":
@@ -499,19 +508,24 @@ def _sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
-def stream_message(request: ChatRequest) -> Iterator[str]:
+def stream_message(request: ChatRequest, user_id: str) -> Iterator[str]:
     """Persist a request, then send model output to the browser incrementally."""
     conversation_id = request.conversation_id or uuid4()
     try:
         with db() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "SELECT title,model,parent_conversation_id,parent_turn_index,context_mode FROM conversations WHERE id=%s",
+                "SELECT title,model,parent_conversation_id,parent_turn_index,context_mode,user_id FROM conversations WHERE id=%s",
                 (conversation_id,),
             )
             conversation = cursor.fetchone()
             if not conversation:
-                cursor.execute("INSERT INTO conversations(id,model) VALUES(%s,%s)", (conversation_id, request.model))
-                conversation = ("New chat", request.model, None, None, "inherit")
+                cursor.execute("INSERT INTO conversations(id,model,user_id) VALUES(%s,%s,%s)", (conversation_id, request.model, user_id))
+                conversation = ("New chat", request.model, None, None, "inherit", user_id)
+            else:
+                if conversation[5] is not None and conversation[5] != user_id:
+                    raise HTTPException(403, "Access denied to this conversation.")
+                if conversation[5] is None:
+                    cursor.execute("UPDATE conversations SET user_id=%s WHERE id=%s", (user_id, conversation_id))
 
             # Build context-aware history
             if conversation[2] is not None and conversation[4] == "inherit":
